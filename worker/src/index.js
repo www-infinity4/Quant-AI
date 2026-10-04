@@ -35,6 +35,7 @@ export async function handle(request,env){
   const identity=await authenticate(env,request);
   if(url.pathname==='/api/packets')return json(await ingestPacket(env.DB,env.QUANTA_DB,identity,body));
   if(url.pathname==='/api/search')return json(await searchWithQuant(env.DB,env.QUANTA_DB,identity,body.quant_id,body.item_key));
+  if(url.pathname==='/api/quants/owned'&&request.method==='GET')return json(await ownedQuants(env.QUANTA_DB,identity));
   if(url.pathname==='/api/folders'&&request.method==='POST')return json(await createFolder(env.DB,identity,body),201);
   if(url.pathname==='/api/folders'&&request.method==='GET')return json(await listFolders(env.DB,identity));
   if(url.pathname==='/api/folders/add'&&request.method==='POST')return json(await addFolderQuant(env.DB,env.QUANTA_DB,identity,body.folder_id,body.quant_id));
@@ -50,3 +51,10 @@ async function chat(env,message){
  if(!res.ok)throw fail('ai_unavailable',502);const data=await res.json();return {reply:String(data.reply??data.response??'')};
 }
 export default {fetch:handle};
+async function ownedQuants(quantaDb,identity){
+ const {results}=await quantaDb.prepare(`SELECT j.quant_mint_id AS quant_id,j.query_text,j.created_at
+ FROM quanta_search_journal j JOIN quant_mints m ON m.mint_id=j.quant_mint_id
+ WHERE j.user_id=? AND j.status='COMMITTED' AND j.quant_mint_id IS NOT NULL
+ ORDER BY j.created_at DESC LIMIT 1000`).bind(identity.userId).all();
+ return {quants:(results||[]).map(x=>({quant_id:x.quant_id,query:String(x.query_text||''),created_at:x.created_at}))};
+}
