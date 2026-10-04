@@ -25,3 +25,17 @@ CREATE TRIGGER IF NOT EXISTS quant_events_no_update BEFORE UPDATE ON quant_event
 CREATE TRIGGER IF NOT EXISTS quant_events_no_delete BEFORE DELETE ON quant_events BEGIN SELECT RAISE(ABORT,'immutable_quant_event'); END;
 CREATE TRIGGER IF NOT EXISTS quant_search_uses_no_update BEFORE UPDATE ON quant_search_uses BEGIN SELECT RAISE(ABORT,'immutable_quant_search_use'); END;
 CREATE TRIGGER IF NOT EXISTS quant_search_uses_no_delete BEFORE DELETE ON quant_search_uses BEGIN SELECT RAISE(ABORT,'immutable_quant_search_use'); END;
+
+CREATE TABLE IF NOT EXISTS quant_folders(
+ folder_id TEXT PRIMARY KEY,wallet_id TEXT NOT NULL,name TEXT NOT NULL,description TEXT NOT NULL DEFAULT '',
+ created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP);
+CREATE INDEX IF NOT EXISTS idx_quant_folders_wallet ON quant_folders(wallet_id,updated_at);
+CREATE TABLE IF NOT EXISTS quant_folder_items(
+ folder_id TEXT NOT NULL,quant_id TEXT NOT NULL,added_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+ PRIMARY KEY(folder_id,quant_id),FOREIGN KEY(folder_id) REFERENCES quant_folders(folder_id),FOREIGN KEY(quant_id) REFERENCES quant_packets(quant_id));
+CREATE TABLE IF NOT EXISTS inventory_experiments(
+ experiment_id TEXT PRIMARY KEY,wallet_id TEXT NOT NULL,folder_id TEXT,name TEXT NOT NULL,item_label TEXT NOT NULL,
+ unit_cost_minor INTEGER NOT NULL CHECK(unit_cost_minor>=0),target_price_minor INTEGER NOT NULL CHECK(target_price_minor>=0),
+ test_quantity INTEGER NOT NULL CHECK(test_quantity>0 AND test_quantity<=1000),currency TEXT NOT NULL DEFAULT 'USD',
+ evidence_json TEXT NOT NULL DEFAULT '[]',status TEXT NOT NULL DEFAULT 'planned',created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+ FOREIGN KEY(folder_id) REFERENCES quant_folders(folder_id));
