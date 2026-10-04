@@ -1,0 +1,17 @@
+name = "quant-ai"
+main = "worker/src/index.js"
+compatibility_date = "2024-09-23"
+
+[assets]
+directory = "./public"
+binding = "ASSETS"
+run_worker_first = ["/api/*"]
+
+[vars]
+# URL of the existing QuantaPhi AI route (GPT-routed Cloudflare worker)
+QUANTAPHI_AI_URL = ""
+
+[[d1_databases]]
+binding = "DB"
+database_name = "quant-ai"
+database_id = "REPLACE_WITH_D1_ID"
