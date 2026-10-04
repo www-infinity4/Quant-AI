@@ -39,7 +39,9 @@ export async function searchWithQuant(db,quantaDb,identity,quantId,itemKey){
  const {results}=await db.prepare(
   "SELECT p.quant_id,t.tag_key,t.confidence FROM quant_tags t JOIN quant_packets p ON p.quant_id=t.quant_id WHERE t.tag_key=? AND p.quant_id<>? ORDER BY t.confidence DESC LIMIT 50"
  ).bind(itemKey,quantId).all();
- return {item_key:itemKey,matches:(results||[]).map(r=>({quant_id:r.quant_id,signal:r.tag_key,confidence:Number(r.confidence)}))};
+ const scope='match:'+identity.walletId+':'+itemKey+':'+new Date().toISOString().slice(0,10);
+ const matches=[];for(const r of results||[]){matches.push({alias:await rotatingAlias(scope,r.quant_id),signal:r.tag_key,confidence:Number(r.confidence)})}
+ return {item_key:itemKey,matches,privacy:{identity:'scoped_rotating_alias',rotation:'daily',stable_wallet_exposed:false}};
 }
 
 const clean=v=>String(v??'').replace(/\s+/g,' ').trim();
@@ -78,4 +80,10 @@ export async function createInventoryExperiment(db,identity,input={}){
  await db.prepare(`INSERT INTO inventory_experiments(experiment_id,wallet_id,folder_id,name,item_label,unit_cost_minor,target_price_minor,test_quantity,currency,evidence_json)
  VALUES(?,?,?,?,?,?,?,?,?,?)`).bind(experiment_id,identity.walletId,input.folder_id||null,name,item,cost,price,qty,clean(input.currency)||'USD',JSON.stringify(evidence)).run();
  return {experiment_id,name,item_label:item,test_quantity:qty,unit_cost_minor:cost,target_price_minor:price,currency:clean(input.currency)||'USD',gross_margin_minor:(price-cost)*qty,evidence};
+}
+
+async function rotatingAlias(scope,subject){
+ const bytes=await crypto.subtle.digest('SHA-256',new TextEncoder().encode(scope+'|'+subject));
+ const token=Array.from(new Uint8Array(bytes).slice(0,9),b=>b.toString(16).padStart(2,'0')).join('');
+ return 'qa_'+token;
 }
