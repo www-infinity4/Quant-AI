@@ -1,4 +1,4 @@
-import { ingestPacket, searchWithQuant } from './store.js';
+import { ingestPacket, searchWithQuant, createFolder, listFolders, addFolderQuant, createInventoryExperiment } from './store.js';
 
 export const SYSTEM_PROMPT=`You are Quant-AI, the usefulness assistant for QuantaPhi Quant owners.
 Help a common user turn their own permitted Quant signals into organization, research, inventory experiments and anonymous market matching.
@@ -28,13 +28,17 @@ async function authenticate(env,request){
 export async function handle(request,env){
  const url=new URL(request.url);
  if(!url.pathname.startsWith('/api/'))return env.ASSETS?env.ASSETS.fetch(request):json({error:'not_found'},404);
- if(request.method!=='POST')return json({error:'method_not_allowed'},405);
- let body;try{body=await request.json()}catch{return json({error:'invalid_json'},400)}
+ if(!['POST','GET'].includes(request.method))return json({error:'method_not_allowed'},405);
+ let body={};if(request.method==='POST'){try{body=await request.json()}catch{return json({error:'invalid_json'},400)}}
  try{
-  if(url.pathname==='/api/chat')return json(await chat(env,body.message));
+  if(url.pathname==='/api/chat'&&request.method==='POST')return json(await chat(env,body.message));
   const identity=await authenticate(env,request);
   if(url.pathname==='/api/packets')return json(await ingestPacket(env.DB,env.QUANTA_DB,identity,body));
   if(url.pathname==='/api/search')return json(await searchWithQuant(env.DB,env.QUANTA_DB,identity,body.quant_id,body.item_key));
+  if(url.pathname==='/api/folders'&&request.method==='POST')return json(await createFolder(env.DB,identity,body),201);
+  if(url.pathname==='/api/folders'&&request.method==='GET')return json(await listFolders(env.DB,identity));
+  if(url.pathname==='/api/folders/add'&&request.method==='POST')return json(await addFolderQuant(env.DB,env.QUANTA_DB,identity,body.folder_id,body.quant_id));
+  if(url.pathname==='/api/inventory/experiments'&&request.method==='POST')return json(await createInventoryExperiment(env.DB,identity,body),201);
   if(url.pathname==='/api/transfer')return json({error:'use_authoritative_quanta_transfer'},409);
   return json({error:'not_found'},404);
  }catch(e){if(e.status)return json({error:e.message},e.status);console.error('Quant-AI request failed',e);return json({error:'internal_error'},500)}
