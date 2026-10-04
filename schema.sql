@@ -1,22 +1,24 @@
--- Quant-AI D1 schema. Stores packet-derived signals keyed by unified wallet
--- address only; no per-user history is ever exposed through the API.
-CREATE TABLE IF NOT EXISTS quants(
+-- Quant-AI companion schema.
+-- QuantaPhi remains authoritative for wallet identity, Quant minting, balances and transfers.
+-- This database stores only packet-derived signals, receipts and one-use AI search entitlements.
+PRAGMA foreign_keys=ON;
+
+CREATE TABLE IF NOT EXISTS quant_packets(
   quant_id TEXT PRIMARY KEY,
-  holder_wallet TEXT NOT NULL,
-  search_used INTEGER NOT NULL DEFAULT 0 CHECK(search_used IN (0,1)),
+  source_mint_id TEXT NOT NULL UNIQUE,
+  provenance_hash TEXT NOT NULL UNIQUE,
+  ingested_by_wallet TEXT NOT NULL,
   ingested_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 
-CREATE TABLE IF NOT EXISTS quant_transfers(
-  transfer_id INTEGER PRIMARY KEY AUTOINCREMENT,
-  quant_id TEXT NOT NULL,
-  from_wallet TEXT NOT NULL,
-  to_wallet TEXT NOT NULL,
-  created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
-  FOREIGN KEY(quant_id) REFERENCES quants(quant_id)
+CREATE TABLE IF NOT EXISTS quant_search_uses(
+  quant_id TEXT PRIMARY KEY,
+  wallet_id TEXT NOT NULL,
+  item_key TEXT NOT NULL,
+  used_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  FOREIGN KEY(quant_id) REFERENCES quant_packets(quant_id)
 );
 
--- Wallet-level signals: "this wallet shops / likes this item".
 CREATE TABLE IF NOT EXISTS wallet_signals(
   wallet TEXT NOT NULL,
   item_key TEXT NOT NULL,
@@ -32,5 +34,14 @@ CREATE TABLE IF NOT EXISTS receipts(
   item_key TEXT NOT NULL,
   amount INTEGER NOT NULL CHECK(amount>0),
   created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
-  FOREIGN KEY(quant_id) REFERENCES quants(quant_id)
+  FOREIGN KEY(quant_id) REFERENCES quant_packets(quant_id)
 );
+
+CREATE TRIGGER IF NOT EXISTS quant_packets_no_update BEFORE UPDATE ON quant_packets
+BEGIN SELECT RAISE(ABORT,'immutable_quant_packet'); END;
+CREATE TRIGGER IF NOT EXISTS quant_packets_no_delete BEFORE DELETE ON quant_packets
+BEGIN SELECT RAISE(ABORT,'immutable_quant_packet'); END;
+CREATE TRIGGER IF NOT EXISTS quant_search_uses_no_update BEFORE UPDATE ON quant_search_uses
+BEGIN SELECT RAISE(ABORT,'immutable_quant_search_use'); END;
+CREATE TRIGGER IF NOT EXISTS quant_search_uses_no_delete BEFORE DELETE ON quant_search_uses
+BEGIN SELECT RAISE(ABORT,'immutable_quant_search_use'); END;
