@@ -1,47 +1,66 @@
-import { ingestPacket, transferQuant, searchWithQuant } from './store.js';
+import { ingestPacket, searchWithQuant } from './store.js';
 
 export const SYSTEM_PROMPT = `You are the Quant-AI assistant, a routing plug-in for QuantaPhi.
 Explain how to use quants, read the packet shipped with each quant, and handle receipts.
-Rules: each quant allows exactly one search; search results contain unified wallet addresses and
-their shop/like signals only, never a user's history; quants can be spent between users, so a holder
-may own quants they did not create. Never reveal or infer personal history.`;
+Rules: each eligible quant packet allows exactly one Quant-AI search; search results contain unified
+wallet addresses and their shop/like signals only, never a user's history. QuantaPhi's authenticated
+ledger is authoritative for wallet identity, minting, balances and transfers. Never reveal or infer
+personal history.`;
 
 const json = (body, status = 200) =>
   new Response(JSON.stringify(body), { status, headers: { 'content-type': 'application/json' } });
+const fail = (code,status=400)=>Object.assign(new Error(code),{status});
+
+async function authenticate(env, request) {
+  const authorization=request.headers.get('Authorization')||'';
+  const match=/^Bearer\s+(sq_[A-Za-z0-9_-]{32,})$/.exec(authorization);
+  if(!match) throw fail('authorization_required',401);
+  if(!env.IDENTITY_DB) throw fail('identity_not_configured',503);
+  const digest=await crypto.subtle.digest('SHA-256',new TextEncoder().encode(match[1]));
+  const tokenHash=Array.from(new Uint8Array(digest),b=>b.toString(16).padStart(2,'0')).join('');
+  const identity=await env.IDENTITY_DB.prepare(
+    'SELECT a.id AS user_id FROM accounts a JOIN account_devices d ON d.account_id=a.id WHERE d.token_hash=?'
+  ).bind(tokenHash).first();
+  if(!identity) throw fail('invalid_device_token',401);
+  if(!env.QUANTA_DB) throw fail('quanta_ledger_not_configured',503);
+  const wallet=await env.QUANTA_DB.prepare(
+    "SELECT wallet_id,status FROM quant_wallets WHERE user_id=?"
+  ).bind(identity.user_id).first();
+  if(!wallet) throw fail('quant_wallet_not_found',404);
+  if(wallet.status!=='active') throw fail('wallet_disabled',403);
+  return {userId:identity.user_id,walletId:wallet.wallet_id};
+}
 
 export async function handle(request, env) {
   const url = new URL(request.url);
   if (!url.pathname.startsWith('/api/')) return env.ASSETS ? env.ASSETS.fetch(request) : json({ error: 'not_found' }, 404);
   if (request.method !== 'POST') return json({ error: 'method_not_allowed' }, 405);
-  // Placeholder auth: wire this to the QuantaPhi wallet session before production.
-  const wallet = request.headers.get('x-wallet-address');
   let body;
   try { body = await request.json(); } catch { return json({ error: 'invalid_json' }, 400); }
   try {
+    if(url.pathname==='/api/chat') return json(await chat(env, body.message));
+    const identity=await authenticate(env,request);
     switch (url.pathname) {
-      case '/api/packets': return json(await ingestPacket(env.DB, wallet, body));
-      case '/api/transfer': return json(await transferQuant(env.DB, wallet, body.to, body.quant_id));
-      case '/api/search': return json(await searchWithQuant(env.DB, wallet, body.quant_id, body.item_key));
-      case '/api/chat': return json(await chat(env, body.message));
+      case '/api/packets': return json(await ingestPacket(env.DB, env.QUANTA_DB, identity, body));
+      case '/api/search': return json(await searchWithQuant(env.DB, env.QUANTA_DB, identity, body.quant_id, body.item_key));
+      case '/api/transfer': return json({error:'use_authoritative_quanta_transfer'},409);
       default: return json({ error: 'not_found' }, 404);
     }
   } catch (e) {
     if (e.status) return json({ error: e.message }, e.status);
+    console.error('Quant-AI request failed',e);
     return json({ error: 'internal_error' }, 500);
   }
 }
 
 async function chat(env, message) {
-  if (typeof message !== 'string' || !message.trim() || message.length > 2000) {
-    throw Object.assign(new Error('invalid_message'), { status: 400 });
-  }
-  if (!env.QUANTAPHI_AI_URL) return { reply: 'AI routing is not configured yet. Set QUANTAPHI_AI_URL.' };
+  if (typeof message !== 'string' || !message.trim() || message.length > 2000) throw fail('invalid_message');
+  if (!env.QUANTAPHI_AI_URL) return { reply: 'AI routing is not configured yet.' };
   const res = await fetch(env.QUANTAPHI_AI_URL, {
-    method: 'POST',
-    headers: { 'content-type': 'application/json' },
+    method: 'POST', headers: { 'content-type': 'application/json' },
     body: JSON.stringify({ system: SYSTEM_PROMPT, message }),
   });
-  if (!res.ok) throw Object.assign(new Error('ai_unavailable'), { status: 502 });
+  if (!res.ok) throw fail('ai_unavailable',502);
   const data = await res.json();
   return { reply: String(data.reply ?? data.response ?? '') };
 }
