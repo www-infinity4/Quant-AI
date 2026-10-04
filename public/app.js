@@ -11,3 +11,19 @@ async function ask(message){
 }
 document.getElementById('f').addEventListener('submit',e=>{e.preventDefault();ask(input.value.trim())});
 document.querySelectorAll('[data-prompt]').forEach(b=>b.addEventListener('click',()=>ask(b.dataset.prompt)));
+
+const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+function deviceToken(){for(const k of ['starquest_device_token_v1','starquest_device_token_v2','starquest:deviceToken:v1']){const v=localStorage.getItem(k);if(v&&/^sq_/.test(v))return v}return ''}
+async function api(path,{method='GET',body}={}){
+ const token=deviceToken();if(!token)throw new Error('Open Quant-AI from your authenticated QuantaPhi wallet so it can use your private device identity.');
+ const r=await fetch(path,{method,headers:{Authorization:'Bearer '+token,...(body?{'content-type':'application/json'}:{})},body:body?JSON.stringify(body):undefined,signal:AbortSignal.timeout(12000)});
+ const d=await r.json().catch(()=>({}));if(!r.ok)throw new Error(d.error||'Request failed');return d;
+}
+async function refreshFolders(){
+ const box=document.getElementById('folders'),select=document.getElementById('inventoryFolder');if(!box||!select)return;
+ try{const d=await api('/api/folders');const fs=d.folders||[];box.innerHTML=fs.length?fs.map(f=>`<div class="folder"><b>${esc(f.name)}</b><span>${Number(f.quant_count||0)} Quants</span><small>${esc(f.description||'')}</small></div>`).join(''):'<p class="muted">No folders yet.</p>';select.innerHTML='<option value="">No folder selected</option>'+fs.map(f=>`<option value="${esc(f.folder_id)}">${esc(f.name)}</option>`).join('')}
+ catch(e){box.innerHTML=`<p class="muted">${esc(e.message)}</p>`}
+}
+document.getElementById('folderForm')?.addEventListener('submit',async e=>{e.preventDefault();const b=e.submitter;b.disabled=true;try{await api('/api/folders',{method:'POST',body:{name:folderName.value,description:folderDescription.value}});e.target.reset();await refreshFolders()}catch(err){document.getElementById('folders').innerHTML=`<p class="muted">${esc(err.message)}</p>`}finally{b.disabled=false}});
+document.getElementById('inventoryForm')?.addEventListener('submit',async e=>{e.preventDefault();const out=document.getElementById('inventoryResult'),b=e.submitter;b.disabled=true;try{const d=await api('/api/inventory/experiments',{method:'POST',body:{folder_id:inventoryFolder.value||null,name:inventoryName.value,item_label:inventoryItem.value,test_quantity:Number(inventoryQty.value),unit_cost_minor:Math.round(Number(inventoryCost.value)*100),target_price_minor:Math.round(Number(inventoryPrice.value)*100),currency:'USD'}});out.innerHTML=`<div class="experiment"><b>${esc(d.name)}</b><p>Test ${d.test_quantity} × ${esc(d.item_label)}. Planned gross margin before other costs: $${(Number(d.gross_margin_minor)/100).toFixed(2)}.</p><small>${(d.evidence||[]).length} supporting Quant/tag evidence rows saved.</small></div>`}catch(err){out.innerHTML=`<p class="muted">${esc(err.message)}</p>`}finally{b.disabled=false}});
+refreshFolders();
