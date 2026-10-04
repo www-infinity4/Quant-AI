@@ -1,4 +1,5 @@
 import { ingestPacket, searchWithQuant, createFolder, listFolders, addFolderQuant, createInventoryExperiment } from './store.js';
+import { publicCapabilityContract } from './capabilities.js';
 
 export const SYSTEM_PROMPT=`You are Quant-AI, the usefulness assistant for QuantaPhi Quant owners.
 Help a common user turn their own permitted Quant signals into organization, research, inventory experiments and anonymous market matching.
@@ -29,6 +30,7 @@ export async function handle(request,env){
  const url=new URL(request.url);
  if(!url.pathname.startsWith('/api/'))return env.ASSETS?env.ASSETS.fetch(request):json({error:'not_found'},404);
  if(!['POST','GET'].includes(request.method))return json({error:'method_not_allowed'},405);
+ if(url.pathname==='/api/capabilities'&&request.method==='GET')return json(publicCapabilityContract());
  let body={};if(request.method==='POST'){try{body=await request.json()}catch{return json({error:'invalid_json'},400)}}
  try{
   if(url.pathname==='/api/chat'&&request.method==='POST')return json(await chat(env,body.message));
