@@ -15,3 +15,16 @@ QUANTAPHI_AI_URL = ""
 binding = "DB"
 database_name = "quant-ai"
 database_id = "REPLACE_WITH_D1_ID"
+
+# Existing authoritative QuantaPhi ledgers; IDs copied from
+# QuantaPhi/workers/quanta-phi-ledger/wrangler.toml.
+# These are resource identifiers, not credentials. Verify account access at deploy.
+[[d1_databases]]
+binding = "IDENTITY_DB"
+database_name = "starquest-ledger"
+database_id = "a1a973b2-a37c-4e1c-b68e-a73803238206"
+
+[[d1_databases]]
+binding = "QUANTA_DB"
+database_name = "infinity-ledger"
+database_id = "711b3e05-f318-4d30-9a67-4de2af92aa6d"
