@@ -80,7 +80,8 @@ test('never ingest, use or folder-add another wallet mint',async()=>{
  res=await send(env,'/api/folders/add',{folder_id:ownFolder.folder_id,quant_id:'q1'},TOKEN_B);
  assert.equal(res.status,403);
  res=await send(env,'/api/search',{quant_id:'q1',item_key:'pink_floyd'},TOKEN_B);
- assert.equal(res.status,403);
+ assert.equal(res.status,409); // Public scans are disabled until ledger settlement exists.
+ await assert.rejects(searchWithQuant(env.DB,env.QUANTA_DB,{walletId:'wallet_b',userId:'user_b'},'q1','pink_floyd'),{message:'quant_not_owned'});
 });
 
 test('rejects mismatched mint, missing/duplicate evidence and forged provenance',async()=>{
