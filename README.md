@@ -8,7 +8,7 @@ main does not yet contain the Worker.
 - Protected data routes authenticate a Bearer sq_ device token against IDENTITY_DB and resolve an active wallet in QUANTA_DB. The old x-wallet-address assumption is removed.
 - Authoritative mint lookup, packet ingest, single-use matching records, and scoped daily aliases.
 - Owned search-Quant lookup, folders, and saved inventory experiments; frontend controls exist for folders, inventory and Packet v2 JSON upload/paste.
-- Chat forwarding exists but does not load wallet evidence.
+- Chat forwarding requires an authenticated wallet; it does not yet load wallet evidence and the QUANTAPHI_AI_URL integration is unverified.
 - Transfers return use_authoritative_quanta_transfer; this Worker does not move balances.
 
 ## Repository wiring
@@ -16,9 +16,13 @@ wrangler.toml now declares IDENTITY_DB (starquest-ledger) and QUANTA_DB
 (infinity-ledger), using resource IDs from QuantaPhi/workers/quanta-phi-ledger/wrangler.toml.
 These identifiers are not secrets and do not verify live account access.
 
-Deployment still requires the actual Quant-AI DB ID, schema application, a verified
-QUANTAPHI_AI_URL with a compatible request/response contract, and authenticated
-deployment access. Do not guess values or put credentials in this repository.
+The Cloudflare Quant-AI D1 database is now provisioned with verified ID
+`4bb698ec-ee8c-42ec-ab4b-329f5df6ef95` and `schema.sql` has been applied.
+The two existing authoritative D1 databases were inspected read-only and their
+required table columns confirmed. Deployment still needs the Quant-AI Worker
+itself, service binding from the site Worker, and verification of the live origin.
+`QUANTAPHI_AI_URL` must be verified independently before enabling AI chat.
+Do not guess values or put credentials in the repository.
 
 The UI reads device tokens from same-origin localStorage. A separate origin cannot
 inherit QuantaPhi's token. Wallet access needs an explicit same-origin mount and API
@@ -30,8 +34,10 @@ Matching still has no frontend control and no authoritative spend.
 
 ## Remaining ledger and evidence work
 This is not a deployed accountant or a five-Quant spend implementation.
-Matching checks a positive balance and records a unique search use; it does not
-debit the authoritative ledger or settle a receipt. Mint existence is not proof of
+The public `POST /api/search` is intentionally **disabled (409)** until the
+authoritative five-Quant settlement and receipt bridge is built. The internal
+matching helper is covered by unit tests but must not be used as a paid
+transaction, because checking a balance and recording a use is not a debit. Mint existence is not proof of
 current unit ownership after a fungible transfer. Packet ingest verifies mint provenance
 and that the mint's wallet matches the authenticated wallet, and rejects duplicate or
 dangling evidence. Folder assignment also checks that wallet and personal_organize
@@ -57,3 +63,15 @@ Music/ambience remains unbuilt.
   folder purpose checks, inventory consent, and matching consent/expiry.
 - No live wallet, AI call, Cloudflare deployment, authoritative debit, paid scan,
   or customer purchase claim was verified.
+
+## Self-contained edge build
+`npm run build:edge` generates `dist/worker.mjs`, a standalone Cloudflare
+module with the current HTML/CSS/client JS embedded for same-origin delivery.
+It uses the regular `DB`, `IDENTITY_DB`, and `QUANTA_DB` D1 bindings and needs no
+public GitHub proxy or static asset service. Run `npm test` and
+`node --check dist/worker.mjs` before deployment.
+
+QuantaPhi PR #87 added a private `/quant-ai/` service-binding adapter and was
+merged to QuantaPhi's main branch. That repository change alone does not mean
+the production edge Worker has been deployed. Configure `QUANT_AI` as a
+Cloudflare Worker service binding to `quant-ai` only after the Worker is live.
