@@ -20,3 +20,5 @@ jobs:
       - run: node --check worker/src/packet.js
       - run: node --check worker/src/store.js
       - run: npm test
+      - run: npm run build:edge
+      - run: node --check dist/worker.mjs
