@@ -1,0 +1,22 @@
+name: Quant-AI checks
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+      - copilot/www-infinity4quanta-phi-ai-assistant
+permissions:
+  contents: read
+jobs:
+  unit:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - run: node --check public/app.js
+      - run: node --check worker/src/index.js
+      - run: node --check worker/src/packet.js
+      - run: node --check worker/src/store.js
+      - run: npm test
