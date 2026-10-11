@@ -10,12 +10,15 @@ export function validWallet(w){return validId(w)}
 
 export function parsePacket(p){
   if(!p||typeof p!=='object'||p.version!==2)throw new Error('unsupported_packet');
-  if(!validId(p.quant_id)||!validId(p.mint_id))throw new Error('invalid_quant_id');
+  if(!validId(p.quant_id)||!validId(p.mint_id)||p.quant_id!==p.mint_id)throw new Error('invalid_quant_id');
   if(!/^[a-f0-9]{64}$/i.test(p.provenance_hash||''))throw new Error('invalid_provenance');
 
   const events=Array.isArray(p.events)?p.events:[];
   if(events.length>100)throw new Error('too_many_events');
+  const eventIds=new Set();
   const normalizedEvents=events.map(e=>{
+    if(eventIds.has(e?.event_id))throw new Error('duplicate_event');
+    eventIds.add(e?.event_id);
     if(!e||!validId(e.event_id)||!KINDS.has(e.kind))throw new Error('invalid_event');
     const subject={type:clean(e.subject?.type,40),key:clean(e.subject?.key,128),label:clean(e.subject?.label,180)};
     if(!subject.type||!validId(subject.key))throw new Error('invalid_subject');
@@ -31,17 +34,21 @@ export function parsePacket(p){
 
   const tags=Array.isArray(p.tags)?p.tags:[];
   if(tags.length>50)throw new Error('too_many_tags');
+  const tagKeys=new Set();
   const normalizedTags=tags.map(t=>{
+    if(tagKeys.has(t?.key))throw new Error('duplicate_tag');
+    tagKeys.add(t?.key);
     if(!t||!validId(t.key))throw new Error('invalid_tag');
     const evidence=Array.isArray(t.evidence_event_ids)?t.evidence_event_ids.filter(validId).slice(0,20):[];
     const confidence=Number(t.confidence);
-    if(!evidence.length||!Number.isFinite(confidence)||confidence<0||confidence>1)throw new Error('invalid_tag');
+    if(!evidence.length||evidence.some(id=>!eventIds.has(id))||!Number.isFinite(confidence)||confidence<0||confidence>1)throw new Error('invalid_tag_evidence');
     return {key:t.key,label:clean(t.label,100),confidence,evidence_event_ids:evidence};
   });
 
   const permissions=p.permissions&&typeof p.permissions==='object'?p.permissions:{};
   const purposes=Array.isArray(permissions.purposes)?permissions.purposes.filter(x=>PURPOSES.has(x)):[];
   const expiresAt=clean(permissions.expires_at,40);
+  if(expiresAt&&(!/^\d{4}-\d\d-\d\dT\d\d:\d\d:\d\d/.test(expiresAt)||!Number.isFinite(Date.parse(expiresAt))))throw new Error('invalid_permission_expiry');
 
   return {
     version:2,quant_id:p.quant_id,mint_id:p.mint_id,provenance_hash:p.provenance_hash.toLowerCase(),
