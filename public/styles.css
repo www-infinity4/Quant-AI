@@ -2,3 +2,9 @@
 .workspace-grid{display:grid;gap:16px}.workspace h3{margin:10px 0;font-size:18px}.workspace select{font:inherit;width:100%;padding:13px 14px;border:1px solid #d8cbe5;border-radius:12px;margin:0 0 10px;background:#fff}.numbers{display:grid;grid-template-columns:1fr 1fr;gap:8px}.numbers input:first-child{grid-column:1/-1}.folder,.experiment{margin:10px 0;padding:12px;border:1px solid var(--line);border-radius:13px;background:#f7f4fb}.folder{display:grid;grid-template-columns:1fr auto;gap:4px 10px}.folder small{grid-column:1/-1;color:#75687f}.folder span{font-size:12px;font-weight:800;color:var(--p)}.muted{color:#75687f;font-size:14px}@media(min-width:680px){.workspace-grid{grid-template-columns:1fr 1fr}}
 
 .owned-quant{display:grid;gap:8px;margin:9px 0;padding:10px;border:1px solid var(--line);border-radius:12px;background:#fff}.owned-quant div{min-width:0}.owned-quant b,.owned-quant small{display:block}.owned-quant small{overflow:hidden;text-overflow:ellipsis;color:#75687f}.owned-quant select{margin:0}@media(min-width:680px){.owned-quant{grid-template-columns:minmax(0,1fr) 180px;align-items:center}}
+
+.packet-import{margin:18px 0;padding:15px;border:1px solid var(--line);border-radius:14px;background:#f9f6fc}
+.packet-import label{display:block;font-size:14px;font-weight:750;margin:8px 0}
+.packet-import textarea{display:block;width:100%;min-height:120px;resize:vertical;font:13px/1.5 ui-monospace,SFMono-Regular,monospace;padding:12px;border:1px solid #d8cbe5;border-radius:12px;background:#fff}
+.packet-import input[type=file]{font-size:13px}
+.packet-import #packetResult{overflow-wrap:anywhere}
