@@ -45,7 +45,19 @@ async function refreshOwnedQuants(){
  const box=document.getElementById('ownedQuants');if(!box)return;
  try{const d=await api('/api/quants/owned'),qs=d.quants||[];if(!qs.length){box.innerHTML='<p class="muted">No committed search Quants found.</p>';return}
  box.innerHTML=qs.slice(0,100).map(q=>`<div class="owned-quant"><div><b>${esc(q.query||'Search Quant')}</b><small>${esc(q.quant_id)}</small></div><select data-quant="${esc(q.quant_id)}"><option value="">Add to folder…</option>${folderCache.map(f=>`<option value="${esc(f.folder_id)}">${esc(f.name)}</option>`).join('')}</select></div>`).join('');
- box.querySelectorAll('select[data-quant]').forEach(sel=>sel.addEventListener('change',async()=>{if(!sel.value)return;sel.disabled=true;try{await api('/api/folders/add',{method:'POST',body:{folder_id:sel.value,quant_id:sel.dataset.quant}});await // Packet v2 is locally inspected before it reaches the authenticated Worker.
+ box.querySelectorAll('select[data-quant]').forEach(sel=>sel.addEventListener('change',async()=>{
+  if(!sel.value)return;
+  sel.disabled=true;
+  try{
+   await api('/api/folders/add',{method:'POST',body:{folder_id:sel.value,quant_id:sel.dataset.quant}});
+   await refreshFolders();await refreshOwnedQuants();
+  }catch(e){alert(e.message)}finally{sel.disabled=false}
+ }));
+ }catch(e){box.innerHTML=`<p class="muted">${esc(e.message)}</p>`}
+}
+document.getElementById('folderForm')?.addEventListener('submit',async e=>{e.preventDefault();const b=e.submitter;b.disabled=true;try{await api('/api/folders',{method:'POST',body:{name:folderName.value,description:folderDescription.value}});e.target.reset();await refreshFolders();await refreshOwnedQuants()}catch(err){document.getElementById('folders').innerHTML=`<p class="muted">${esc(err.message)}</p>`}finally{b.disabled=false}});
+document.getElementById('inventoryForm')?.addEventListener('submit',async e=>{e.preventDefault();const out=document.getElementById('inventoryResult'),b=e.submitter;b.disabled=true;try{const d=await api('/api/inventory/experiments',{method:'POST',body:{folder_id:inventoryFolder.value||null,name:inventoryName.value,item_label:inventoryItem.value,test_quantity:Number(inventoryQty.value),unit_cost_minor:Math.round(Number(inventoryCost.value)*100),target_price_minor:Math.round(Number(inventoryPrice.value)*100),currency:'USD'}});out.innerHTML=`<div class="experiment"><b>${esc(d.name)}</b><p>Test ${d.test_quantity} × ${esc(d.item_label)}. Planned gross margin before other costs: $${(Number(d.gross_margin_minor)/100).toFixed(2)}.</p><small>${(d.evidence||[]).length} supporting Quant/tag evidence rows saved.</small></div>`}catch(err){out.innerHTML=`<p class="muted">${esc(err.message)}</p>`}finally{b.disabled=false}});
+// Packet v2 is locally inspected before it reaches the authenticated Worker.
 const packetText=document.getElementById('packetJson');
 const packetFile=document.getElementById('packetFile');
 const packetResult=document.getElementById('packetResult');
@@ -72,9 +84,4 @@ document.getElementById('packetForm')?.addEventListener('submit',async e=>{
  }catch(err){packetResult.textContent=err.message==='quant_already_ingested'?'Packet already imported; no duplicate created.':err.message}
  finally{if(button)button.disabled=false}
 });
-refreshFolders().then(refreshOwnedQuants);await refreshOwnedQuants()}catch(e){alert(e.message)}finally{sel.disabled=false}}));
- }catch(e){box.innerHTML=`<p class="muted">${esc(e.message)}</p>`}
-}
-document.getElementById('folderForm')?.addEventListener('submit',async e=>{e.preventDefault();const b=e.submitter;b.disabled=true;try{await api('/api/folders',{method:'POST',body:{name:folderName.value,description:folderDescription.value}});e.target.reset();await refreshFolders();await refreshOwnedQuants()}catch(err){document.getElementById('folders').innerHTML=`<p class="muted">${esc(err.message)}</p>`}finally{b.disabled=false}});
-document.getElementById('inventoryForm')?.addEventListener('submit',async e=>{e.preventDefault();const out=document.getElementById('inventoryResult'),b=e.submitter;b.disabled=true;try{const d=await api('/api/inventory/experiments',{method:'POST',body:{folder_id:inventoryFolder.value||null,name:inventoryName.value,item_label:inventoryItem.value,test_quantity:Number(inventoryQty.value),unit_cost_minor:Math.round(Number(inventoryCost.value)*100),target_price_minor:Math.round(Number(inventoryPrice.value)*100),currency:'USD'}});out.innerHTML=`<div class="experiment"><b>${esc(d.name)}</b><p>Test ${d.test_quantity} × ${esc(d.item_label)}. Planned gross margin before other costs: $${(Number(d.gross_margin_minor)/100).toFixed(2)}.</p><small>${(d.evidence||[]).length} supporting Quant/tag evidence rows saved.</small></div>`}catch(err){out.innerHTML=`<p class="muted">${esc(err.message)}</p>`}finally{b.disabled=false}});
-refreshFolders();
+refreshFolders().then(refreshOwnedQuants);
