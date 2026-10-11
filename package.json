@@ -1,0 +1,9 @@
+{
+  "name": "quant-ai",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test": "node --test test/*.test.js",
+    "build:edge": "node scripts/build-edge.mjs"
+  }
+}
