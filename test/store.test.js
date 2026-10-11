@@ -4,6 +4,7 @@ import { DatabaseSync } from 'node:sqlite';
 import { createHash } from 'node:crypto';
 import { readFileSync } from 'node:fs';
 import { handle } from '../worker/src/index.js';
+import { searchWithQuant } from '../worker/src/store.js';
 
 const TOKEN_A='sq_'+'a'.repeat(40), TOKEN_B='sq_'+'b'.repeat(40);
 const digest=s=>createHash('sha256').update(s).digest('hex');
@@ -101,21 +102,22 @@ test('matches only consented, unexpired evidence, never exposing wallet IDs',asy
  assert.equal((await send(env,'/api/packets',sealed)).status,200);
  assert.equal((await send(env,'/api/packets',packet('q1',HASH_A))).status,200);
  let res=await send(env,'/api/search',{quant_id:'q1',item_key:'pink_floyd'});
- assert.equal(res.status,200);
- let data=await body(res);
+ assert.equal(res.status,409);
+ assert.equal((await body(res)).error,'authoritative_scan_settlement_not_configured');
+ let data=await searchWithQuant(env.DB,env.QUANTA_DB,{walletId:'wallet_a',userId:'user_a'},'q1','pink_floyd');
  assert.deepEqual(data.matches,[]);
  assert.equal(JSON.stringify(data).includes('wallet_a'),false);
- assert.equal((await send(env,'/api/search',{quant_id:'q1',item_key:'pink_floyd'})).status,409);
+ await assert.rejects(searchWithQuant(env.DB,env.QUANTA_DB,{walletId:'wallet_a',userId:'user_a'},'q1','pink_floyd'),{message:'quant_search_already_used'});
 });
 test('rejects expired matching consent and rejects legacy wallet headers',async()=>{
  const env=fixture();
  const expired=packet('q1',HASH_A,{permissions:{purposes:['anonymous_matching'],merchant_alias_allowed:true,expires_at:'2020-01-01T00:00:00Z'}});
  assert.equal((await send(env,'/api/packets',expired)).status,200);
- assert.equal((await send(env,'/api/search',{quant_id:'q1',item_key:'pink_floyd'})).status,403);
+ await assert.rejects(searchWithQuant(env.DB,env.QUANTA_DB,{walletId:'wallet_a',userId:'user_a'},'q1','pink_floyd'),{message:'search_not_permitted'});
  const legacy=await handle(new Request('https://quantaphi.org/api/folders',{method:'POST',headers:{'x-wallet-address':'wallet_a','content-type':'application/json'},body:'{"name":"No"}'}),env);
  assert.equal(legacy.status,401);
 });
-test('chat validates input without requiring an unrelated wallet token',async()=>{
+test('chat validates input with an authenticated device token',async()=>{
  const env=fixture();
  assert.equal((await send(env,'/api/chat',{message:''})).status,400);
  assert.equal((await send(env,'/api/chat',{message:'Hi'})).status,200);
@@ -143,4 +145,10 @@ test('folder assignment rejects Packet not authorized for personal organization'
  const result=await send(env,'/api/folders/add',{folder_id:folder.folder_id,quant_id:'q1'});
  assert.equal(result.status,403);
  assert.equal((await body(result)).error,'organize_not_permitted');
+});
+
+test('chat rejects anonymous requests even before AI is configured',async()=>{
+ const env=fixture();
+ const r=await handle(new Request('https://quantaphi.org/api/chat',{method:'POST',headers:{'content-type':'application/json'},body:'{"message":"Hi"}'}),env);
+ assert.equal(r.status,401);
 });
