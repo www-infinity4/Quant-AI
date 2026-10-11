@@ -71,8 +71,10 @@ export async function addFolderQuant(db,quantaDb,identity,folderId,quantId){
  if(mint.wallet_id!==identity.walletId)throw fail('quant_not_owned',403);
  const folder=await db.prepare('SELECT folder_id FROM quant_folders WHERE folder_id=? AND wallet_id=?').bind(folderId,identity.walletId).first();
  if(!folder)throw fail('folder_not_found',404);
- const packet=await db.prepare('SELECT quant_id,ingested_by_wallet FROM quant_packets WHERE quant_id=?').bind(quantId).first();if(!packet)throw fail('packet_not_ingested',409);
+ const packet=await db.prepare('SELECT quant_id,ingested_by_wallet,permissions_json FROM quant_packets WHERE quant_id=?').bind(quantId).first();if(!packet)throw fail('packet_not_ingested',409);
  if(packet.ingested_by_wallet!==identity.walletId)throw fail('packet_wallet_mismatch',403);
+ let permission={};try{permission=JSON.parse(packet.permissions_json||'{}')}catch{}
+ if(!Array.isArray(permission.purposes)||!permission.purposes.includes('personal_organize')||(permission.expires_at&&Date.parse(permission.expires_at)<=Date.now()))throw fail('organize_not_permitted',403);
  try{await db.prepare('INSERT INTO quant_folder_items(folder_id,quant_id) VALUES(?,?)').bind(folderId,quantId).run()}catch(e){if(!/UNIQUE|constraint/i.test(String(e.message)))throw e}
  return {folder_id:folderId,quant_id:quantId};
 }
@@ -82,9 +84,15 @@ export async function createInventoryExperiment(db,identity,input={}){
  let evidence=[];
  if(input.folder_id){
   const folder=await db.prepare('SELECT folder_id FROM quant_folders WHERE folder_id=? AND wallet_id=?').bind(input.folder_id,identity.walletId).first();if(!folder)throw fail('folder_not_found',404);
-  const {results}=await db.prepare(`SELECT i.quant_id,t.tag_key,t.label,t.confidence FROM quant_folder_items i
-   LEFT JOIN quant_tags t ON t.quant_id=i.quant_id WHERE i.folder_id=? ORDER BY t.confidence DESC LIMIT 50`).bind(input.folder_id).all();
-  evidence=(results||[]).map(x=>({quant_id:x.quant_id,tag:x.tag_key,label:x.label,confidence:Number(x.confidence||0)}));
+  const {results}=await db.prepare(`SELECT i.quant_id,t.tag_key,t.label,t.confidence,p.permissions_json FROM quant_folder_items i
+   JOIN quant_packets p ON p.quant_id=i.quant_id
+   LEFT JOIN quant_tags t ON t.quant_id=i.quant_id
+   WHERE i.folder_id=? AND p.ingested_by_wallet=? ORDER BY t.confidence DESC LIMIT 100`).bind(input.folder_id,identity.walletId).all();
+  evidence=(results||[]).filter(x=>{
+   if(!x.tag_key)return false;
+   let permission={};try{permission=JSON.parse(x.permissions_json||'{}')}catch{}
+   return Array.isArray(permission.purposes)&&permission.purposes.includes('inventory_planning')&&(!permission.expires_at||Date.parse(permission.expires_at)>Date.now());
+  }).slice(0,50).map(x=>({quant_id:x.quant_id,tag:x.tag_key,label:x.label,confidence:Number(x.confidence||0)}));
  }
  const experiment_id=uid('inv');
  await db.prepare(`INSERT INTO inventory_experiments(experiment_id,wallet_id,folder_id,name,item_label,unit_cost_minor,target_price_minor,test_quantity,currency,evidence_json)
