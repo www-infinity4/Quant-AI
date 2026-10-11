@@ -32,10 +32,11 @@ export async function handle(request,env){
  if(!['POST','GET'].includes(request.method))return json({error:'method_not_allowed'},405);
  let body={};if(request.method==='POST'){try{body=await request.json()}catch{return json({error:'invalid_json'},400)}}
  try{
-  if(path==='/api/chat'&&request.method==='POST')return json(await chat(env,body.message));
   const identity=await authenticate(env,request);
+  if(path==='/api/chat'&&request.method==='POST')return json(await chat(env,body.message));
   if(path==='/api/packets'&&request.method==='POST')return json(await ingestPacket(env.DB,env.QUANTA_DB,identity,body));
-  if(path==='/api/search'&&request.method==='POST')return json(await searchWithQuant(env.DB,env.QUANTA_DB,identity,body.quant_id,body.item_key));
+  // Matching is disabled at the public API until authoritative five-Quant settlement is integrated.
+  if(path==='/api/search'&&request.method==='POST')return json({error:'authoritative_scan_settlement_not_configured'},409);
   if(path==='/api/quants/owned'&&request.method==='GET')return json(await ownedQuants(env.QUANTA_DB,identity));
   if(path==='/api/folders'&&request.method==='POST')return json(await createFolder(env.DB,identity,body),201);
   if(path==='/api/folders'&&request.method==='GET')return json(await listFolders(env.DB,identity));
