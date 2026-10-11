@@ -27,20 +27,21 @@ async function authenticate(env,request){
 }
 export async function handle(request,env){
  const url=new URL(request.url);
- if(!url.pathname.startsWith('/api/'))return env.ASSETS?env.ASSETS.fetch(request):json({error:'not_found'},404);
+ const path=url.pathname.startsWith('/quant-ai/api/')?url.pathname.slice('/quant-ai'.length):url.pathname;
+ if(!path.startsWith('/api/'))return env.ASSETS?env.ASSETS.fetch(request):json({error:'not_found'},404);
  if(!['POST','GET'].includes(request.method))return json({error:'method_not_allowed'},405);
  let body={};if(request.method==='POST'){try{body=await request.json()}catch{return json({error:'invalid_json'},400)}}
  try{
-  if(url.pathname==='/api/chat'&&request.method==='POST')return json(await chat(env,body.message));
+  if(path==='/api/chat'&&request.method==='POST')return json(await chat(env,body.message));
   const identity=await authenticate(env,request);
-  if(url.pathname==='/api/packets')return json(await ingestPacket(env.DB,env.QUANTA_DB,identity,body));
-  if(url.pathname==='/api/search')return json(await searchWithQuant(env.DB,env.QUANTA_DB,identity,body.quant_id,body.item_key));
-  if(url.pathname==='/api/quants/owned'&&request.method==='GET')return json(await ownedQuants(env.QUANTA_DB,identity));
-  if(url.pathname==='/api/folders'&&request.method==='POST')return json(await createFolder(env.DB,identity,body),201);
-  if(url.pathname==='/api/folders'&&request.method==='GET')return json(await listFolders(env.DB,identity));
-  if(url.pathname==='/api/folders/add'&&request.method==='POST')return json(await addFolderQuant(env.DB,env.QUANTA_DB,identity,body.folder_id,body.quant_id));
-  if(url.pathname==='/api/inventory/experiments'&&request.method==='POST')return json(await createInventoryExperiment(env.DB,identity,body),201);
-  if(url.pathname==='/api/transfer')return json({error:'use_authoritative_quanta_transfer'},409);
+  if(path==='/api/packets'&&request.method==='POST')return json(await ingestPacket(env.DB,env.QUANTA_DB,identity,body));
+  if(path==='/api/search'&&request.method==='POST')return json(await searchWithQuant(env.DB,env.QUANTA_DB,identity,body.quant_id,body.item_key));
+  if(path==='/api/quants/owned'&&request.method==='GET')return json(await ownedQuants(env.QUANTA_DB,identity));
+  if(path==='/api/folders'&&request.method==='POST')return json(await createFolder(env.DB,identity,body),201);
+  if(path==='/api/folders'&&request.method==='GET')return json(await listFolders(env.DB,identity));
+  if(path==='/api/folders/add'&&request.method==='POST')return json(await addFolderQuant(env.DB,env.QUANTA_DB,identity,body.folder_id,body.quant_id));
+  if(path==='/api/inventory/experiments'&&request.method==='POST')return json(await createInventoryExperiment(env.DB,identity,body),201);
+  if(path==='/api/transfer')return json({error:'use_authoritative_quanta_transfer'},409);
   return json({error:'not_found'},404);
  }catch(e){if(e.status)return json({error:e.message},e.status);console.error('Quant-AI request failed',e);return json({error:'internal_error'},500)}
 }
@@ -54,7 +55,7 @@ export default {fetch:handle};
 async function ownedQuants(quantaDb,identity){
  const {results}=await quantaDb.prepare(`SELECT j.quant_mint_id AS quant_id,j.query_text,j.created_at
  FROM quanta_search_journal j JOIN quant_mints m ON m.mint_id=j.quant_mint_id
- WHERE j.user_id=? AND j.status='COMMITTED' AND j.quant_mint_id IS NOT NULL
- ORDER BY j.created_at DESC LIMIT 1000`).bind(identity.userId).all();
+ WHERE j.user_id=? AND m.wallet_id=? AND j.status='COMMITTED' AND j.quant_mint_id IS NOT NULL
+ ORDER BY j.created_at DESC LIMIT 1000`).bind(identity.userId,identity.walletId).all();
  return {quants:(results||[]).map(x=>({quant_id:x.quant_id,query:String(x.query_text||''),created_at:x.created_at}))};
 }
