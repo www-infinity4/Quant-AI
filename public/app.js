@@ -5,7 +5,7 @@ async function ask(message){
   if(!message)return;
   add(message,true); input.value='';
   try{
-    const r=await fetch('/api/chat',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({message}),signal:AbortSignal.timeout(12000)});
+    const r=await fetch(apiUrl('/api/chat'),{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({message}),signal:AbortSignal.timeout(12000)});
     const d=await r.json(); add(r.ok?d.reply:'The assistant is unavailable right now.');
   }catch{add('The assistant is unavailable right now.')}
 }
