@@ -14,7 +14,7 @@ QUANTAPHI_AI_URL = ""
 [[d1_databases]]
 binding = "DB"
 database_name = "quant-ai"
-database_id = "REPLACE_WITH_D1_ID"
+database_id = "4bb698ec-ee8c-42ec-ab4b-329f5df6ef95"
 
 # Existing authoritative QuantaPhi ledgers; IDs copied from
 # QuantaPhi/workers/quanta-phi-ledger/wrangler.toml.
