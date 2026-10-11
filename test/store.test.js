@@ -120,3 +120,27 @@ test('chat validates input without requiring an unrelated wallet token',async()=
  assert.equal((await send(env,'/api/chat',{message:''})).status,400);
  assert.equal((await send(env,'/api/chat',{message:'Hi'})).status,200);
 });
+
+test('inventory evidence includes only consented Packet signals',async()=>{
+ const env=fixture();
+ const planning=packet('q3',HASH_C,{permissions:{purposes:['personal_organize','inventory_planning'],merchant_alias_allowed:false}});
+ assert.equal((await send(env,'/api/packets',packet('q1',HASH_A))).status,200);
+ assert.equal((await send(env,'/api/packets',planning)).status,200);
+ const folder=await body(await send(env,'/api/folders',{name:'Music inventory'}));
+ for(const id of ['q1','q3'])assert.equal((await send(env,'/api/folders/add',{folder_id:folder.folder_id,quant_id:id})).status,200);
+ const experiment=await send(env,'/api/inventory/experiments',{folder_id:folder.folder_id,name:'Six albums',item_label:'Album',test_quantity:6,unit_cost_minor:800,target_price_minor:1200,currency:'USD'});
+ assert.equal(experiment.status,201);
+ const result=await body(experiment);
+ assert.equal(result.gross_margin_minor,2400);
+ assert.equal(result.evidence.length,1);
+ assert.equal(result.evidence[0].quant_id,'q3');
+});
+test('folder assignment rejects Packet not authorized for personal organization',async()=>{
+ const env=fixture();
+ const restricted=packet('q1',HASH_A,{permissions:{purposes:['aggregate_research'],merchant_alias_allowed:false}});
+ assert.equal((await send(env,'/api/packets',restricted)).status,200);
+ const folder=await body(await send(env,'/api/folders',{name:'Not allowed'}));
+ const result=await send(env,'/api/folders/add',{folder_id:folder.folder_id,quant_id:'q1'});
+ assert.equal(result.status,403);
+ assert.equal((await body(result)).error,'organize_not_permitted');
+});
