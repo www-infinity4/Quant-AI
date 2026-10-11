@@ -11,6 +11,7 @@ export async function ingestPacket(db,quantaDb,identity,packet){
  if(!validWallet(identity.walletId))throw fail('invalid_wallet');
  let p;try{p=parsePacket(packet)}catch(e){throw fail(e.message)}
  const mint=await authoritativeMint(quantaDb,p.mint_id);
+ if(mint.wallet_id!==identity.walletId)throw fail('quant_not_owned',403);
  if(mint.mint_id!==p.quant_id||mint.provenance_hash.toLowerCase()!==p.provenance_hash)throw fail('provenance_mismatch',409);
  const stmts=[db.prepare(
   'INSERT INTO quant_packets(quant_id,source_mint_id,provenance_hash,ingested_by_wallet,packet_version,permissions_json) VALUES(?,?,?,?,2,?)'
@@ -27,20 +28,27 @@ export async function ingestPacket(db,quantaDb,identity,packet){
 
 export async function searchWithQuant(db,quantaDb,identity,quantId,itemKey){
  if(!validWallet(identity.walletId)||!validWallet(itemKey))throw fail('invalid_request');
- await authoritativeMint(quantaDb,quantId);
- const packet=await db.prepare('SELECT permissions_json FROM quant_packets WHERE quant_id=?').bind(quantId).first();
+ const mint=await authoritativeMint(quantaDb,quantId);
+ if(mint.wallet_id!==identity.walletId)throw fail('quant_not_owned',403);
+ const packet=await db.prepare('SELECT permissions_json,ingested_by_wallet FROM quant_packets WHERE quant_id=?').bind(quantId).first();
  if(!packet)throw fail('packet_not_ingested',409);
+ if(packet.ingested_by_wallet!==identity.walletId)throw fail('packet_wallet_mismatch',403);
  let permissions={};try{permissions=JSON.parse(packet.permissions_json||'{}')}catch{}
- if(!Array.isArray(permissions.purposes)||!permissions.purposes.includes('anonymous_matching'))throw fail('search_not_permitted',403);
+ if(!Array.isArray(permissions.purposes)||!permissions.purposes.includes('anonymous_matching')||!permissions.merchant_alias_allowed|| (permissions.expires_at&&Date.parse(permissions.expires_at)<=Date.now()))throw fail('search_not_permitted',403);
  const balance=await quantaDb.prepare('SELECT balance FROM quant_wallet_balances WHERE wallet_id=?').bind(identity.walletId).first();
  if(Number(balance?.balance||0)<1)throw fail('quant_unavailable',403);
  try{await db.prepare('INSERT INTO quant_search_uses(quant_id,wallet_id,item_key) VALUES(?,?,?)').bind(quantId,identity.walletId,itemKey).run()}
  catch(e){if(/UNIQUE|constraint/i.test(String(e.message)))throw fail('quant_search_already_used',409);throw e}
  const {results}=await db.prepare(
-  "SELECT p.quant_id,t.tag_key,t.confidence FROM quant_tags t JOIN quant_packets p ON p.quant_id=t.quant_id WHERE t.tag_key=? AND p.quant_id<>? ORDER BY t.confidence DESC LIMIT 50"
+  "SELECT p.quant_id,p.permissions_json,t.tag_key,t.confidence FROM quant_tags t JOIN quant_packets p ON p.quant_id=t.quant_id WHERE t.tag_key=? AND p.quant_id<>? ORDER BY t.confidence DESC LIMIT 100"
  ).bind(itemKey,quantId).all();
  const scope='match:'+identity.walletId+':'+itemKey+':'+new Date().toISOString().slice(0,10);
- const matches=[];for(const r of results||[]){matches.push({alias:await rotatingAlias(scope,r.quant_id),signal:r.tag_key,confidence:Number(r.confidence)})}
+ const matches=[];for(const r of results||[]){
+  let allowed={};try{allowed=JSON.parse(r.permissions_json||'{}')}catch{}
+  if(!allowed.merchant_alias_allowed||!Array.isArray(allowed.purposes)||!allowed.purposes.includes('anonymous_matching')||(allowed.expires_at&&Date.parse(allowed.expires_at)<=Date.now()))continue;
+  matches.push({alias:await rotatingAlias(scope,r.quant_id),signal:r.tag_key,confidence:Number(r.confidence)});
+  if(matches.length===50)break;
+ }
  return {item_key:itemKey,matches,privacy:{identity:'scoped_rotating_alias',rotation:'daily',stable_wallet_exposed:false}};
 }
 
@@ -59,10 +67,12 @@ export async function listFolders(db,identity){
  return {folders:results||[]};
 }
 export async function addFolderQuant(db,quantaDb,identity,folderId,quantId){
- await authoritativeMint(quantaDb,quantId);
+ const mint=await authoritativeMint(quantaDb,quantId);
+ if(mint.wallet_id!==identity.walletId)throw fail('quant_not_owned',403);
  const folder=await db.prepare('SELECT folder_id FROM quant_folders WHERE folder_id=? AND wallet_id=?').bind(folderId,identity.walletId).first();
  if(!folder)throw fail('folder_not_found',404);
- const packet=await db.prepare('SELECT quant_id FROM quant_packets WHERE quant_id=?').bind(quantId).first();if(!packet)throw fail('packet_not_ingested',409);
+ const packet=await db.prepare('SELECT quant_id,ingested_by_wallet FROM quant_packets WHERE quant_id=?').bind(quantId).first();if(!packet)throw fail('packet_not_ingested',409);
+ if(packet.ingested_by_wallet!==identity.walletId)throw fail('packet_wallet_mismatch',403);
  try{await db.prepare('INSERT INTO quant_folder_items(folder_id,quant_id) VALUES(?,?)').bind(folderId,quantId).run()}catch(e){if(!/UNIQUE|constraint/i.test(String(e.message)))throw e}
  return {folder_id:folderId,quant_id:quantId};
 }
