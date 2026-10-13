@@ -1,3 +1,4 @@
+import { personalProfile, assistListing } from './personal.js';
 import { ingestPacket, searchWithQuant, createFolder, listFolders, addFolderQuant, createInventoryExperiment } from './store.js';
 
 export const SYSTEM_PROMPT=`You are Quant-AI, the usefulness assistant for QuantaPhi Quant owners.
@@ -33,7 +34,9 @@ export async function handle(request,env){
  let body={};if(request.method==='POST'){try{body=await request.json()}catch{return json({error:'invalid_json'},400)}}
  try{
   const identity=await authenticate(env,request);
-  if(path==='/api/chat'&&request.method==='POST')return json(await chat(env,body.message));
+  if(path==='/api/personal/profile')return json(await personalProfile(env.DB,identity,body,request.method==='POST'));
+  if(path==='/api/seller/assist'&&request.method==='POST')return json(await assistListing(env,identity,body));
+  if(path==='/api/chat'&&request.method==='POST')return json(await chat(env,body.message,identity));
   if(path==='/api/packets'&&request.method==='POST')return json(await ingestPacket(env.DB,env.QUANTA_DB,identity,body));
   // Matching is disabled at the public API until authoritative five-Quant settlement is integrated.
   if(path==='/api/search'&&request.method==='POST')return json({error:'authoritative_scan_settlement_not_configured'},409);
@@ -46,8 +49,15 @@ export async function handle(request,env){
   return json({error:'not_found'},404);
  }catch(e){if(e.status)return json({error:e.message},e.status);console.error('Quant-AI request failed',e);return json({error:'internal_error'},500)}
 }
-async function chat(env,message){
+async function chat(env,message,identity){
  if(typeof message!=='string'||!message.trim()||message.length>2000)throw fail('invalid_message');
+ if(env.ORACLE){
+  const profile=await personalProfile(env.DB,identity,{});
+  const input=SYSTEM_PROMPT+'\nOnly the following user-approved selling defaults are supplied as private context. No identity, wallet identifier or other user data is supplied: '+JSON.stringify(profile.defaults)+'\nUser message: '+message;
+  const r=await env.ORACLE.fetch(new Request('https://infinity-rogers.marvaseater.workers.dev/v1/chat',{method:'POST',headers:{'Content-Type':'application/json',Origin:'https://quantaphi.org'},body:JSON.stringify({input,context:{application:'Quant-AI',task:'private-personal-assistant',requireCloudflare:true}}),signal:AbortSignal.timeout(25000)}));
+  const d=await r.json();if(!r.ok||d.ok===false)throw fail('personal_ai_unavailable',502);
+  return {ok:true,reply:String(d.output_text||d.output||d.response||''),provider:'Oracle through Quant-AI',privacy:{identitySentToModel:false,chatgptHistoryConnected:false}};
+ }
  if(!env.QUANTAPHI_AI_URL)return {reply:'AI routing is not configured yet.'};
  const res=await fetch(env.QUANTAPHI_AI_URL,{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({system:SYSTEM_PROMPT,message})});
  if(!res.ok)throw fail('ai_unavailable',502);const data=await res.json();return {reply:String(data.reply??data.response??'')};

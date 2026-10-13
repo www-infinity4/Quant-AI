@@ -6,6 +6,8 @@ const read = file => readFileSync(resolve(root, file), 'utf8');
 let packet = read('worker/src/packet.js');
 let store = read('worker/src/store.js');
 let entry = read('worker/src/index.js');
+const personal=read('worker/src/personal.js').replace(/export (async )?function /g,(_,a)=>(a||'')+'function ');
+entry=entry.replace("import { personalProfile, assistListing } from './personal.js';\n",'');
 
 const change = (source, oldText, newText, label) => {
  if (!source.includes(oldText)) throw Error('Missing source marker: ' + label);
@@ -43,6 +45,7 @@ const result = [
  'return {ingestPacket,searchWithQuant,createFolder,listFolders,addFolderQuant,createInventoryExperiment};})(PacketModule);',
  'const {ingestPacket,searchWithQuant,createFolder,listFolders,addFolderQuant,createInventoryExperiment}=StoreModule;',
  embedded,
+ personal,
  entry
 ].join('\n');
 mkdirSync(resolve(root,'dist'),{recursive:true});
