@@ -1,4 +1,5 @@
 import { personalProfile, assistListing } from './personal.js';
+import { shopPhiOwned, shopPhiPublic } from './shopphi.js';
 import { ingestPacket, searchWithQuant, createFolder, listFolders, addFolderQuant, createInventoryExperiment } from './store.js';
 
 export const SYSTEM_PROMPT=`You are Quant-AI, the usefulness assistant for QuantaPhi Quant owners.
@@ -31,9 +32,15 @@ export async function handle(request,env){
  const path=url.pathname.startsWith('/quant-ai/api/')?url.pathname.slice('/quant-ai'.length):url.pathname;
  if(!path.startsWith('/api/'))return env.ASSETS?env.ASSETS.fetch(request):json({error:'not_found'},404);
  if(!['POST','GET'].includes(request.method))return json({error:'method_not_allowed'},405);
- let body={};if(request.method==='POST'){try{body=await request.json()}catch{return json({error:'invalid_json'},400)}}
  try{
+  // Unlisted seller page and its attached images: public read is allowed only
+  // for listings explicitly published by the authenticated owner.
+  if(/^\/api\/shopphi\/(public|media)\//.test(path)&&request.method==='GET')
+   return await shopPhiPublic(request,env,path);
+  const sellerPhoto=path==='/api/shopphi/media'&&request.method==='POST';
+  let body={};if(request.method==='POST'&&!sellerPhoto){try{body=await request.json()}catch{return json({error:'invalid_json'},400)}}
   const identity=await authenticate(env,request);
+  if(path.startsWith('/api/shopphi/'))return await shopPhiOwned(request,env,identity,path,body);
   if(path==='/api/personal/profile')return json(await personalProfile(env.DB,identity,body,request.method==='POST'));
   if(path==='/api/seller/assist'&&request.method==='POST')return json(await assistListing(env,identity,body));
   if(path==='/api/chat'&&request.method==='POST')return json(await chat(env,body.message,identity));
