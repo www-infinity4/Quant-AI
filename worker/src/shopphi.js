@@ -80,11 +80,11 @@ export async function shopPhiOwned(request,env,identity,path,body={}){
   // Media receipts must already belong to this authenticated owner.
   for(const photoId of x.photoIds){const m=await db.prepare('SELECT listing_id FROM shopphi_media WHERE media_id=? AND owner_user_id=?').bind(photoId,own).first();
    if(!m||(m.listing_id&&m.listing_id!==x.listingId))throw fail('seller_photo_not_owned',403);}
-  await db.prepare(\`INSERT INTO shopphi_listings(listing_id,owner_user_id,public_alias,title,description,category,item_condition,shipping,quantity,price_cents,source_url,image_url,created_at,updated_at)
+  await db.prepare(`INSERT INTO shopphi_listings(listing_id,owner_user_id,public_alias,title,description,category,item_condition,shipping,quantity,price_cents,source_url,image_url,created_at,updated_at)
   VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?)
   ON CONFLICT(listing_id) DO UPDATE SET title=excluded.title,description=excluded.description,category=excluded.category,
   item_condition=excluded.item_condition,shipping=excluded.shipping,quantity=excluded.quantity,price_cents=excluded.price_cents,
-  source_url=excluded.source_url,image_url=excluded.image_url,updated_at=excluded.updated_at\`)
+  source_url=excluded.source_url,image_url=excluded.image_url,updated_at=excluded.updated_at`)
    .bind(x.listingId,own,alias,x.title,x.description,x.category,x.condition,x.shipping,x.quantity,x.priceCents,x.sourceUrl,x.imageUrl,now,now).run();
   for(const mediaId of x.photoIds)await db.prepare('UPDATE shopphi_media SET listing_id=? WHERE media_id=? AND owner_user_id=? AND (listing_id IS NULL OR listing_id=?)')
    .bind(x.listingId,mediaId,own,x.listingId).run();
