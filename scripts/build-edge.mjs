@@ -48,7 +48,8 @@ const result = [
  'const {ingestPacket,searchWithQuant,createFolder,listFolders,addFolderQuant,createInventoryExperiment}=StoreModule;',
  embedded,
  personal,
- shopphi,
+ 'const ShopPhiModule=(()=>{',shopphi,'return {shopPhiOwned,shopPhiPublic};})();',
+ 'const {shopPhiOwned,shopPhiPublic}=ShopPhiModule;',
  entry
 ].join('\n');
 mkdirSync(resolve(root,'dist'),{recursive:true});
