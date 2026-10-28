@@ -68,8 +68,8 @@ test('owner cannot attach another person’s private photo id or overwrite a pub
  await assert.rejects(shopPhiOwned(req('/api/shopphi/listings','POST',{}),env,owner,'/api/shopphi/listings',item(id)),/published_listing_cannot_be_overwritten/);
 });
 test('unpublished photo cannot leak through public endpoint',async()=>{
- const {env,owner}=setup(),photo=crypto.randomUUID(),id=crypto.randomUUID();
- env.objects.set('shopphi/photo.webp',new Uint8Array([1,2,3]));
+ const {env,owner,objects}=setup(),photo=crypto.randomUUID(),id=crypto.randomUUID();
+ objects.set('shopphi/photo.webp',new Uint8Array([1,2,3]));
  await env.DB.prepare("INSERT INTO shopphi_media(media_id,owner_user_id,object_key,mime_type,image_bytes,content_hash,created_at) VALUES(?,?,?,?,?,?,?)")
  .bind(photo,owner.userId,'shopphi/photo.webp','image/webp',3,'test',Date.now()).run();
  await assert.rejects(shopPhiPublic(req('/api/shopphi/media/'+photo),env,'/api/shopphi/media/'+photo),/photo_not_public/);
