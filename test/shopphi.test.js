@@ -79,3 +79,33 @@ test('unpublished photo cannot leak through public endpoint',async()=>{
  const result=await shopPhiPublic(req('/api/shopphi/media/'+photo),env,'/api/shopphi/media/'+photo);
  assert.equal(result.status,200);assert.equal(result.headers.get('content-type'),'image/webp');
 });
+
+
+test('published seller can explicitly edit same public item without changing its identity or visibility',async()=>{
+ const {env,owner,other}=setup(),old=item(),path='/api/shopphi/listings/'+old.itemId;
+ await shopPhiOwned(req('/api/shopphi/listings','POST',old),env,owner,'/api/shopphi/listings',old);
+ await shopPhiOwned(req(path+'/publish','POST',{ownItem:true,publishConsent:true}),env,owner,path+'/publish',{ownItem:true,publishConsent:true});
+ const revision={...old,title:'My restored antique radio',priceLabel:'$91.00',confirmPublishedEdit:true};
+ await assert.rejects(shopPhiOwned(req(path+'/edit','POST',revision),env,other,path+'/edit',revision),/listing_not_found/);
+ await assert.rejects(shopPhiOwned(req(path+'/edit','POST',revision),env,owner,path+'/edit',{...revision,confirmPublishedEdit:false}),/published_edit_confirmation_required/);
+ const r=await shopPhiOwned(req(path+'/edit','POST',revision),env,owner,path+'/edit',revision);
+ assert.equal(r.status,200);
+ const updated=await r.json();
+ assert.equal(updated.listing.listingId,old.itemId);
+ assert.equal(updated.listing.status,'published');
+ assert.equal(updated.listing.priceLabel,'$91.00');
+ const p=await (await shopPhiPublic(req('/api/shopphi/public/'+old.itemId),env,'/api/shopphi/public/'+old.itemId)).json();
+ assert.equal(p.listing.title,'My restored antique radio');
+ assert.equal(p.listing.listingId,old.itemId);
+ assert.equal(p.visibility,'unlisted');
+});
+test('private edit does not publish, and a removed listing cannot be resurrected by editing',async()=>{
+ const {env,owner}=setup(),old=item(),path='/api/shopphi/listings/'+old.itemId;
+ await shopPhiOwned(req('/api/shopphi/listings','POST',old),env,owner,'/api/shopphi/listings',old);
+ const edit={...old,title:'Corrected private title'};
+ const r=await (await shopPhiOwned(req(path+'/edit','POST',edit),env,owner,path+'/edit',edit)).json();
+ assert.equal(r.listing.status,'draft');
+ await assert.rejects(shopPhiPublic(req('/api/shopphi/public/'+old.itemId),env,'/api/shopphi/public/'+old.itemId),/listing_not_found/);
+ await shopPhiOwned(req(path+'/remove','POST',{}),env,owner,path+'/remove',{});
+ await assert.rejects(shopPhiOwned(req(path+'/edit','POST',edit),env,owner,path+'/edit',edit),/listing_removed/);
+});
