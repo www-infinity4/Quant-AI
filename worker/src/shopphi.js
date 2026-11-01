@@ -91,6 +91,31 @@ export async function shopPhiOwned(request,env,identity,path,body={}){
   const row=await readOwned(db,own,x.listingId);
   return ok({listing:toPublic(row,await mediaFor(db,x.listingId)),saved:'private-draft',published:false},201);
  }
+ const edit=path.match(/^\/api\/shopphi\/listings\/([0-9a-f-]{36})\/edit$/i);
+ if(edit&&request.method==='POST'){
+  // Identity is verified by the shared Quant-AI router before entry here.
+  // A published item's link and publication state are preserved.
+  const row=await readOwned(db,own,edit[1]);
+  if(row.state==='removed')throw fail('listing_removed',409);
+  if(row.state==='published'&&body.confirmPublishedEdit!==true)throw fail('published_edit_confirmation_required',403);
+  if(body.itemId!==edit[1])throw fail('listing_id_mismatch',409);
+  const x=normalizeListing(body);
+  // The caller must own every newly attached media receipt. Existing photos
+  // remain linked by default to avoid accidentally stripping device photos.
+  for(const photoId of x.photoIds){
+   const m=await db.prepare('SELECT listing_id FROM shopphi_media WHERE media_id=? AND owner_user_id=?')
+    .bind(photoId,own).first();
+   if(!m||(m.listing_id&&m.listing_id!==x.listingId))throw fail('seller_photo_not_owned',403);
+  }
+  const now=Date.now();
+  await db.prepare('UPDATE shopphi_listings SET title=?,description=?,category=?,item_condition=?,shipping=?,quantity=?,price_cents=?,source_url=?,image_url=?,updated_at=? WHERE listing_id=? AND owner_user_id=?')
+   .bind(x.title,x.description,x.category,x.condition,x.shipping,x.quantity,x.priceCents,x.sourceUrl,x.imageUrl,now,x.listingId,own).run();
+  for(const photoId of x.photoIds)await db.prepare('UPDATE shopphi_media SET listing_id=? WHERE media_id=? AND owner_user_id=? AND (listing_id IS NULL OR listing_id=?)')
+   .bind(x.listingId,photoId,own,x.listingId).run();
+  const current=await readOwned(db,own,x.listingId);
+  return ok({listing:toPublic(current,await mediaFor(db,x.listingId)),
+   edited:true,published:current.state==='published',visibility:current.state==='published'?'unlisted':'private'});
+ }
  const publish=path.match(/^\/api\/shopphi\/listings\/([0-9a-f-]{36})\/publish$/i);
  if(publish&&request.method==='POST'){
   if(body.ownItem!==true||body.publishConsent!==true)throw fail('seller_attestation_required',403);
