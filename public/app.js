@@ -84,3 +84,60 @@ document.getElementById('packetForm')?.addEventListener('submit',async e=>{
  finally{if(button)button.disabled=false}
 });
 refreshFolders().then(refreshOwnedQuants);
+
+/* Owner-scoped StarCoin receipts. No public creator lookup or transfer controls. */
+const scStatus=document.getElementById('starCoinStatus');
+const scWallet=document.getElementById('starCoinWallet');
+const scEvents=document.getElementById('starCoinEvents');
+function receiptMeaning(entry){
+ if(entry.creditMeaning==='fractional_progress')return '+0.1 toward next Star Coin';
+ if(entry.creditMeaning==='fraction_conversion')return '10 fractional credits converted to 1 whole Star Coin';
+ if(entry.creditMeaning==='no_reward')return '0 Star Coins (no credit)';
+ const coins=Number(entry.deltaCoins)||0;
+ return (coins>0?'+':'')+coins+' Star Coin'+(Math.abs(coins)===1?'':'s');
+}
+function starCell(parent,tag,content,cssClass=''){
+ const elem=document.createElement(tag);
+ if(cssClass)elem.className=cssClass;
+ elem.textContent=String(content??'');
+ parent.appendChild(elem);return elem;
+}
+async function refreshStarCoinActivity(source='all'){
+ if(!scStatus||!scWallet||!scEvents)return;
+ scStatus.textContent='Checking your authenticated ledger receipts…';
+ scWallet.replaceChildren();scEvents.replaceChildren();
+ try{
+  const filter=source==='fred'?'?source=fred':'';
+  const result=await api('/api/starcoins/activity'+filter);
+  if(result.ok!==true||!Array.isArray(result.events)||!result.wallet)throw Error('Receipt history unavailable');
+  const w=result.wallet;
+  starCell(scWallet,'strong',w.totalStarCoins+' Star Coins · '+w.username);
+  starCell(scWallet,'p',w.wholeStarCoins+' whole + '+w.pendingTenths+'/10 toward next coin · '+w.shareCount+' recorded shares');
+  starCell(scWallet,'p',w.isMediaStarOwner?'This signed-in wallet is configured as the Media Star owner.':'This signed-in wallet is not configured as the Media Star payout account.');
+  const count=result.events.length;
+  scStatus.textContent=count+' authenticated '+(source==='fred'?"Fred's Space":'StarCoin')+' events found.'+(result.hasMore?' Showing latest 200 only.':'')+' No account balances changed.';
+  if(!count){starCell(scEvents,'p','No matching receipts for this signed-in wallet. Check which StarQuest account is selected on QuantaPhi.','muted');return;}
+  for(const item of result.events){
+   const card=document.createElement('article');card.className='star-receipt';
+   const header=document.createElement('div');header.className='star-receipt-header';
+   starCell(header,'strong',item.sourceLabel);
+   starCell(header,'span',receiptMeaning(item),'star-amount');
+   card.appendChild(header);
+   const time=item.createdAt?new Date(item.createdAt).toLocaleString():'Unknown time';
+   starCell(card,'p',item.eventType+' · '+time+' · '+item.payoutStatus,'star-meta');
+   if(item.contentKey)starCell(card,'p','Source: '+item.contentKey,'star-source');
+   const detail=document.createElement('details');
+   starCell(detail,'summary','Receipt details');
+   starCell(detail,'p','Event: '+item.eventId);
+   starCell(detail,'p','Reference: '+item.referenceId);
+   starCell(detail,'p','Whole balance after: '+item.wholeBalanceAfter+' · progress '+item.progressTenths+'/10');
+   starCell(detail,'p','Attribution: '+item.attributionStatus+' · status: '+item.payoutStatus);
+   card.appendChild(detail);scEvents.appendChild(card);
+  }
+ }catch(error){
+  scStatus.textContent=error?.message||'Could not confirm your StarCoin receipts.';
+  starCell(scEvents,'p','No amounts are inferred or changed when authenticated readback fails.','muted');
+ }
+}
+document.getElementById('starCoinRefresh')?.addEventListener('click',()=>refreshStarCoinActivity('all'));
+document.getElementById('starCoinFred')?.addEventListener('click',()=>refreshStarCoinActivity('fred'));

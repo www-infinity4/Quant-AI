@@ -1,5 +1,6 @@
 import { personalProfile, assistListing } from './personal.js';
 import { shopPhiOwned, shopPhiPublic } from './shopphi.js';
+import { starCoinActivity } from './starcoin-activity.js';
 import { ingestPacket, searchWithQuant, createFolder, listFolders, addFolderQuant, createInventoryExperiment } from './store.js';
 
 export const SYSTEM_PROMPT=`You are Quant-AI, the usefulness assistant for QuantaPhi Quant owners.
@@ -40,6 +41,7 @@ export async function handle(request,env){
   const sellerPhoto=path==='/api/shopphi/media'&&request.method==='POST';
   let body={};if(request.method==='POST'&&!sellerPhoto){try{body=await request.json()}catch{return json({error:'invalid_json'},400)}}
   const identity=await authenticate(env,request);
+  if(path==='/api/starcoins/activity'&&request.method==='GET')return json(await starCoinActivity(env.IDENTITY_DB,identity.userId,url.searchParams.get('source')||'all'));
   if(path.startsWith('/api/shopphi/'))return await shopPhiOwned(request,env,identity,path,body);
   if(path==='/api/personal/profile')return json(await personalProfile(env.DB,identity,body,request.method==='POST'));
   if(path==='/api/seller/assist'&&request.method==='POST')return json(await assistListing(env,identity,body));
