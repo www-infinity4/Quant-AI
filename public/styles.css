@@ -8,3 +8,19 @@
 .packet-import textarea{display:block;width:100%;min-height:120px;resize:vertical;font:13px/1.5 ui-monospace,SFMono-Regular,monospace;padding:12px;border:1px solid #d8cbe5;border-radius:12px;background:#fff}
 .packet-import input[type=file]{font-size:13px}
 .packet-import #packetResult{overflow-wrap:anywhere}
+
+/* Android-first StarCoin provenance viewer. Read-only, per authenticated wallet. */
+.star-actions{display:flex;gap:10px;flex-wrap:wrap}
+.star-actions button{flex:1 1 190px;min-height:48px}
+.star-wallet{margin:12px 0;padding:14px;background:#f4edfa;border:1px solid #d7c9e7;border-radius:12px}
+.star-wallet strong{font-size:21px}
+.star-wallet p{margin:5px 0;font-size:14px}
+.star-events{display:grid;gap:10px;margin-top:16px}
+.star-receipt{background:#faf7fe;border:1px solid #d7c9e7;border-radius:12px;padding:13px;overflow-wrap:anywhere}
+.star-receipt-header{display:flex;justify-content:space-between;gap:12px;align-items:flex-start}
+.star-amount{color:#4e1e7d;font-weight:800;text-align:right}
+.star-meta,.star-source{font-size:13px;color:#51465b;margin:7px 0;overflow-wrap:anywhere}
+.star-receipt details{margin:6px 0 0;padding:8px;border-top:1px solid #ddd1e7}
+.star-receipt summary{min-height:44px;display:flex;align-items:center;cursor:pointer;font-weight:750}
+.star-receipt details p{font-size:13px;margin:6px 0}
+@media(max-width:420px){.star-receipt-header{display:block}.star-amount{display:block;text-align:left;margin-top:5px}}

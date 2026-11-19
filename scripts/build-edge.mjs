@@ -6,10 +6,12 @@ const read = file => readFileSync(resolve(root, file), 'utf8');
 let packet = read('worker/src/packet.js');
 let store = read('worker/src/store.js');
 let entry = read('worker/src/index.js');
+const starCoinActivitySource = read('worker/src/starcoin-activity.js').replace(/export (async )?function /g,(_,a)=>(a||'')+'function ');
 const personal=read('worker/src/personal.js').replace(/export (async )?function /g,(_,a)=>(a||'')+'function ');
 const shopphi=read('worker/src/shopphi.js').replace(/export (async )?function /g,(_,a)=>(a||'')+'function ');
 entry=entry.replace("import { personalProfile, assistListing } from './personal.js';\n",'');
 entry=entry.replace("import { shopPhiOwned, shopPhiPublic } from './shopphi.js';\n",'');
+entry=entry.replace("import { starCoinActivity } from './starcoin-activity.js';\n",'');
 
 const change = (source, oldText, newText, label) => {
  if (!source.includes(oldText)) throw Error('Missing source marker: ' + label);
@@ -50,6 +52,7 @@ const result = [
  personal,
  'const ShopPhiModule=(()=>{',shopphi,'return {shopPhiOwned,shopPhiPublic};})();',
  'const {shopPhiOwned,shopPhiPublic}=ShopPhiModule;',
+ starCoinActivitySource,
  entry
 ].join('\n');
 mkdirSync(resolve(root,'dist'),{recursive:true});
